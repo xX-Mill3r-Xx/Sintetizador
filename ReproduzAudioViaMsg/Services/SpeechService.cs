@@ -1,10 +1,7 @@
 ﻿using ReproduzAudioViaMsg.Contracts;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Speech.Synthesis;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ReproduzAudioViaMsg.Services
 {
@@ -43,11 +40,11 @@ namespace ReproduzAudioViaMsg.Services
             return _synthesizer.GetInstalledVoices();
         }
 
-        public void SetVoice(string nomeVoz)
+        public void SetVoice(string voiceName)
         {
-            if (!string.IsNullOrEmpty(nomeVoz))
+            if (!string.IsNullOrEmpty(voiceName))
             {
-                _synthesizer.SelectVoice(nomeVoz);
+                _synthesizer.SelectVoice(voiceName);
             }
         }
 
@@ -61,12 +58,12 @@ namespace ReproduzAudioViaMsg.Services
             _synthesizer.Volume = volume;
         }
 
-        public void SpeakAsync(string texto)
+        public void SpeakAsync(string text)
         {
-            if (!string.IsNullOrEmpty(texto))
+            if (!string.IsNullOrEmpty(text))
             {
                 _synthesizer.SetOutputToDefaultAudioDevice();
-                _synthesizer.SpeakAsync(texto);
+                _synthesizer.SpeakAsync(text);
             }
         }
 
@@ -75,9 +72,9 @@ namespace ReproduzAudioViaMsg.Services
             _synthesizer.SpeakAsyncCancelAll();
         }
 
-        public void ExportToFile(string texto, string filePath)
+        public void ExportToFile(string text, string filePath)
         {
-            if (string.IsNullOrEmpty(texto) || string.IsNullOrEmpty(filePath))
+            if (!string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(filePath))
             {
                 using (var synthetizer = new SpeechSynthesizer())
                 {
@@ -85,7 +82,7 @@ namespace ReproduzAudioViaMsg.Services
                     synthetizer.Rate = _synthesizer.Rate;
                     synthetizer.Volume = _synthesizer.Volume;
                     synthetizer.SetOutputToWaveFile(filePath);
-                    synthetizer.Speak(texto);
+                    synthetizer.Speak(text);
                     synthetizer.SetOutputToDefaultAudioDevice();
                 }
             }

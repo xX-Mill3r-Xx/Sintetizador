@@ -11,12 +11,12 @@ namespace ReproduzAudioViaMsg.Contracts
         event EventHandler<SpeakCompletedEventArgs> SpeakCompleted;
 
         IEnumerable<InstalledVoice> GetInstalledVoices();
-        void SetVoice(string nomeVoz);
+        void SetVoice(string voiceName);
         void SetRate(int rate);
         void SetVolume(int volume);
-        void SpeakAsync(string texto);
+        void SpeakAsync(string text);
         void CancelAll();
-        void ExportToFile(string texto, string filePath);
+        void ExportToFile(string text, string filePath);
         void Dispose();
     }
 }

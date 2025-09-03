@@ -54,6 +54,9 @@
     <Compile Include="FrmPrincipal.Designer.cs">
       <DependentUpon>FrmPrincipal.cs</DependentUpon>
     </Compile>
+    <Compile Include="Helpers\ExceptionHandler.cs" />
+    <Compile Include="Helpers\FileExporter.cs" />
+    <Compile Include="Helpers\MessageSpeak.cs" />
     <Compile Include="Helpers\TextHighlighter.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

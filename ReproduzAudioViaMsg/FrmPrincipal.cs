@@ -1,9 +1,10 @@
-﻿using System;
+﻿using ReproduzAudioViaMsg.Contracts;
+using ReproduzAudioViaMsg.Helpers;
+using ReproduzAudioViaMsg.Services;
+using System;
 using System.Drawing;
-using System.IO;
 using System.Linq;
 using System.Speech.Synthesis;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 namespace ReproduzAudioViaMsg
 {
@@ -11,14 +12,9 @@ namespace ReproduzAudioViaMsg
     {
         #region Properties
 
-        private InstalledVoice selecionarVoz;
-        SpeechSynthesizer _synthesizer;
-
-        private int posicaoAtualPalavra = 0;
-        private int tamanhoPalavraAtual = 0;
-        private Color corOriginalFundo;
-        private Color corOriginalTexto;
-        private bool destacoAtivo = false;
+        private readonly ISpeechService _speechService;
+        private readonly TextHighlighter _textHighlighter;
+        private InstalledVoice _selectedVoice;
 
         #endregion
 
@@ -27,88 +23,79 @@ namespace ReproduzAudioViaMsg
         public FrmPrincipal()
         {
             InitializeComponent();
-            _synthesizer = new SpeechSynthesizer();
-            ConfigurarEventoSpeech();
-            ConfigurarTextBox();
-            
+
+            _speechService = new SpeechService();
+            _textHighlighter = new TextHighlighter(txt_Texto);
+            ConfigureSpeechEvents();
+
         }
 
         #endregion
 
         private void FrmPrincipal_Load(object sender, EventArgs e)
         {
-            CarregarVozes();
+            LoadVoices();
             if (cbVoices.Items.Count > 0)
             {
                 cbVoices.SelectedIndex = 0;
             }
         }
 
-        private void ConfigurarEventoSpeech()
+        private void ConfigureSpeechEvents()
         {
-            _synthesizer.SpeakProgress += OnSpeakProgress;
-            _synthesizer.SpeakStarted += OnSpeakStarted;
-            _synthesizer.SpeakCompleted += OnSpeakCompleted;
+            _speechService.SpeakProgress += OnSpeakProgress;
+            _speechService.SpeakStarted += OnSpeakStarted;
+            _speechService.SpeakCompleted += OnSpeakCompleted;
         }
 
-        private void ConfigurarTextBox()
+        private void _speechService_SpeakStarted(object sender, SpeakStartedEventArgs e)
         {
-            corOriginalFundo = txt_Texto.BackColor;
-            corOriginalTexto = txt_Texto.ForeColor;
+            throw new NotImplementedException();
+        }
 
-            if (txt_Texto is RichTextBox)
+        private void LoadVoices()
+        {
+            var voices = _speechService.GetInstalledVoices();
+            cbVoices.Items.Clear();
+            foreach (var voice in voices)
             {
-                ((RichTextBox)txt_Texto).DetectUrls = false;
+                cbVoices.Items.Add(voice.VoiceInfo.Name);
             }
         }
 
         private void btnGerar_Click(object sender, EventArgs e)
         {
-            Gerar();
-
+            GenerateSpeech();
         }
 
-        private void Gerar()
+        private void GenerateSpeech()
         {
-            string texto = txt_Texto.Text;
-            if (!string.IsNullOrEmpty(texto) && selecionarVoz != null)
+            string text = txt_Texto.Text;
+            if (string.IsNullOrEmpty(text) || _selectedVoice == null)
             {
+                string titulo = "Aviso!";
+                string msg = "Digite um texto e selecione uma voz!";
+                MessageSpeak.ShowMessageAndSpeakWarning(msg, titulo, _speechService);
 
-                _synthesizer.SpeakAsyncCancelAll();
-                RemoverDestaque();
+                return;
+            }
 
-                _synthesizer.SetOutputToDefaultAudioDevice();
-                _synthesizer.SelectVoice(selecionarVoz.VoiceInfo.Name);
-                _synthesizer.Rate = tracVelocidade.Value;
-                _synthesizer.Volume = trackVolume.Value;
-                _synthesizer.SpeakAsync(texto);
-            }
-            else
-            {
-                MessageBox.Show("Digite um texto e selecione uma voz!",
-                    "Aviso!",
-                    MessageBoxButtons.OK, 
-                    MessageBoxIcon.Warning);
-            }
-        }
+            _speechService.CancelAll();
+            _textHighlighter.RemoveHighlight();
 
-        private void CarregarVozes()
-        {
-            var vozes = _synthesizer.GetInstalledVoices();
-            cbVoices.Items.Clear();
-            foreach (var voz in vozes)
-            {
-                cbVoices.Items.Add(voz.VoiceInfo.Name);
-            }
+            _speechService.SetVoice(_selectedVoice.VoiceInfo.Name);
+            _speechService.SetRate(tracVelocidade.Value);
+            _speechService.SetVolume(trackVolume.Value);
+            _speechService.SpeakAsync(text);
         }
 
         private void cbVoices_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (cbVoices.SelectedItem != null)
             {
-                string nomeVoz = cbVoices.SelectedItem.ToString();
-                var vozes = _synthesizer.GetInstalledVoices();
-                selecionarVoz = vozes.FirstOrDefault(v => v.VoiceInfo.Name == nomeVoz);
+                string voiceName = cbVoices.SelectedItem.ToString();
+                var voices = _speechService.GetInstalledVoices();
+                _selectedVoice = voices.FirstOrDefault(v => v.VoiceInfo.Name == voiceName);
             }
         }
 
@@ -124,120 +111,63 @@ namespace ReproduzAudioViaMsg
 
         private void btnCancelar_Click(object sender, EventArgs e)
         {
-
-            _synthesizer.SpeakAsyncCancelAll();
-            RemoverDestaque();
-            destacoAtivo = false;
+            _speechService.CancelAll();
+            _textHighlighter.RemoveHighlight();
         }
 
         private void btnExportar_Click(object sender, EventArgs e)
         {
-            pbProgresso.Style = ProgressBarStyle.Marquee;
-            pbProgresso.Visible = true;
-
             ExportarAudio();
-
-            pbProgresso.Style = ProgressBarStyle.Blocks;
-            pbProgresso.Visible = false;
         }
 
         private void ExportarAudio()
         {
-            string texto = txt_Texto.Text; ;
-            if (string.IsNullOrEmpty(texto))
+            string text = txt_Texto.Text; ;
+            if (string.IsNullOrEmpty(text))
             {
-                MessageBox.Show("Digite um texto para exportar!");
+                string title = "Atenção!";
+                string msg = "Digite um texto para exportar!";
+                MessageSpeak.ShowMessageAndSpeakInformation(msg, title, _speechService);
+
                 return;
             }
 
-            if (selecionarVoz == null)
+            if (_selectedVoice == null)
             {
-                MessageBox.Show("Selecione uma voz antes de exportar");
+                string title = "Atenção!";
+                string msg = "Selecione uma voz antes de exportar";
+                MessageSpeak.ShowMessageAndSpeakInformation(msg, title, _speechService);
+
                 return;
             }
 
-            SaveFileDialog saveDialog = new SaveFileDialog();
-            saveDialog.Filter = "Arquivos de Áudio WAV (*.wav) | *.wav";
-            saveDialog.Title = "Salvar áudio como ...";
-            saveDialog.FileName = "audio_sintetizado.wav";
+            string filePath = FileExporter.ShowSaveDialog();
+            if (string.IsNullOrEmpty(filePath))
+                return;
 
-            if (saveDialog.ShowDialog() == DialogResult.OK)
+            if (!FileExporter.ValidateAndCreateDirectory(filePath))
+                return;
+
+            try
             {
-                try
-                {
-                    string caminhoArquivo = saveDialog.FileName;
-                    string diretorio = Path.GetDirectoryName(caminhoArquivo);
+                pbProgresso.Style = ProgressBarStyle.Marquee;
+                pbProgresso.Visible = true;
 
-                    if (!Directory.Exists(diretorio))
-                    {
-                        DialogResult resultado = MessageBox.Show($"O diretório '{diretorio}' não existe.\n\nDeseja criá-lo?",
-                            "Diretório não encontrado.",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Question);
+                _speechService.SetVoice(_selectedVoice.VoiceInfo.Name);
+                _speechService.SetRate(tracVelocidade.Value);
+                _speechService.SetVolume(trackVolume.Value);
+                _speechService.ExportToFile(text, filePath);
 
-                        if (resultado == DialogResult.Yes)
-                        {
-                            Directory.CreateDirectory(diretorio);
-                        }
-                        else
-                        {
-                            return;
-                        }
-                    }
-
-                    using (SpeechSynthesizer synthesizer = new SpeechSynthesizer())
-                    {
-                        synthesizer.SelectVoice(selecionarVoz.VoiceInfo.Name);
-                        synthesizer.Rate = tracVelocidade.Value;
-                        synthesizer.Volume = trackVolume.Value;
-                        synthesizer.SetOutputToWaveFile(caminhoArquivo);
-                        synthesizer.Speak(texto);
-                        synthesizer.SetOutputToDefaultAudioDevice();
-                    }
-
-                    MessageBox.Show($"Arquivo exportado com sucesso!\n\nLocal: {caminhoArquivo}",
-                        "Exportação concluída.",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-
-                    DialogResult abrirPasta = MessageBox.Show("Deseja abrir a pasta onde o arquivo foi salvo?",
-                        "Abrir pasta.",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-
-                    if (abrirPasta == DialogResult.Yes)
-                    {
-                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{caminhoArquivo}\"");
-                    }
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    MessageBox.Show("Erro: Não há permissão para escrever neste local.\n\nTente escolher outro diretório",
-                        "Erro de permissão",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
-                catch (DirectoryNotFoundException)
-                {
-                    MessageBox.Show("Erro: Diretório expecificado não foi encontrado",
-                        "Erro de diretório",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
-                catch (IOException ex)
-                {
-                    MessageBox.Show($"Erro de E/S: {ex.Message}\n\nVerifique se o arquivo não está sendo usado por outro programa.",
-                        "Erro de E/S",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Erro inesperado: {ex.Message}",
-                        "Erro",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
-                }
+                FileExporter.ShowSucessMessage(filePath);
+            }
+            catch (Exception ex)
+            {
+                ExceptionHandler.HandleExportException(ex);
+            }
+            finally
+            {
+                pbProgresso.Style = ProgressBarStyle.Blocks;
+                pbProgresso.Visible = false;
             }
         }
 
@@ -251,21 +181,15 @@ namespace ReproduzAudioViaMsg
 
             try
             {
-                RemoverDestaque();
-
-                posicaoAtualPalavra = e.CharacterPosition;
-                tamanhoPalavraAtual = e.Text.Length;
-
-                AplicarDestaque(posicaoAtualPalavra, tamanhoPalavraAtual);
-                destacoAtivo = true;
-
-                ScrollParaPalavra(posicaoAtualPalavra);
+                _textHighlighter.RemoveHighlight();
+                _textHighlighter.ApplyHighlight(e.CharacterPosition, e.Text.Length);
+                _textHighlighter.ScrollToPosition(e.CharacterPosition);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Erro inesperado: {ex.Message}",
-                    "Erro", 
-                    MessageBoxButtons.OK, 
+                    "Erro",
+                    MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
         }
@@ -277,8 +201,6 @@ namespace ReproduzAudioViaMsg
                 this.Invoke(new Action(() => OnSpeakStarted(sender, e)));
                 return;
             }
-
-            destacoAtivo = true;
         }
 
         private void OnSpeakCompleted(object sender, SpeakCompletedEventArgs e)
@@ -289,61 +211,9 @@ namespace ReproduzAudioViaMsg
                 return;
             }
 
-            RemoverDestaque();
-            destacoAtivo = false;
+            _textHighlighter.RemoveHighlight();
         }
 
-        private void AplicarDestaque(int posicao, int tamanho)
-        {
-            if (txt_Texto is RichTextBox richTextBox)
-            {
-                richTextBox.Select(posicao, tamanho);
-                richTextBox.SelectionBackColor = Color.LightBlue;
-                richTextBox.SelectionColor = Color.DarkBlue;
-
-                richTextBox.Select(richTextBox.Text.Length, 0);
-            }
-            else
-            {
-                txt_Texto.Select(posicao, tamanho);
-                txt_Texto.BackColor = Color.LightBlue;
-            }
-        }
-
-        private void RemoverDestaque()
-        {
-            if (!destacoAtivo)
-            {
-                return;
-            }
-
-            if (txt_Texto is RichTextBox richTextBox)
-            {
-                richTextBox.SelectAll();
-                richTextBox.SelectionBackColor = corOriginalFundo;
-                richTextBox.SelectionColor = corOriginalTexto;
-
-                richTextBox.Select(richTextBox.Text.Length, 0);
-            }
-            else
-            {
-                txt_Texto.BackColor= corOriginalFundo;
-                txt_Texto.ForeColor= corOriginalTexto;
-            }
-        }
-
-        private void ScrollParaPalavra(int posicao)
-        {
-            if (txt_Texto is RichTextBox richTextBox)
-            {
-                richTextBox.Select(posicao, 0);
-                richTextBox.ScrollToCaret();
-            }
-            else if(txt_Texto.Multiline)
-            {
-                txt_Texto.Select(posicao, 0);
-                txt_Texto.ScrollToCaret();
-            }
-        }
+        
     }
 }
